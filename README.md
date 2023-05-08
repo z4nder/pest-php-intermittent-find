@@ -26,7 +26,6 @@
 
 
 ## How to use
-- In the /files folder put your composer.json and or package.json
 - Run:
 ```bash
  cargo run
