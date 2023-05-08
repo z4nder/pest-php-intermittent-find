@@ -1,7 +1,14 @@
 [package]
 name = "pest-intermittent"
-version = "0.1.0"
-edition = "2021"
+version = "1.0.0"
+authors = ["Z4nder <gusttavo212@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "This project aims to find intermittent tests at your php project"
+readme = "README.md"
+homepage = "https://github.com/z4nder/pest-php-intermittent-find"
+repository = "https://github.com/z4nder/pest-php-intermittent-find"
+keywords = ["pest", "pest php", "intermittent", "intermittent find"] 
+categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,4 +16,5 @@ edition = "2021"
 regex = "1.8.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-wena = "0.2.0"
+clap = { version = "4.0", features = ["derive"] }
+indicatif = "0.17.3"
