@@ -9,6 +9,10 @@ homepage = "https://github.com/z4nder/pest-php-intermittent-find"
 repository = "https://github.com/z4nder/pest-php-intermittent-find"
 keywords = ["pest", "pest php", "intermittent", "intermittent find"] 
 categories = ["command-line-utilities"]
+edition = "2021"
+exclude = [
+    "output.json"    
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
