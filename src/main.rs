@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt::format;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::process::Command;
@@ -76,11 +75,11 @@ fn read_json(file_name: &String) -> Result<File, AppErrors> {
     File::open(file_name).map_err(|_| AppErrors::ErrorToReadOutputFile)
 }
 
-fn get_file_content(file: &mut File) -> HashMap<String, u32> {
+fn get_file_content(file: &mut File) -> HashMap<String, String> {
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
 
-    let json_content: Result<HashMap<String, u32>, AppErrors> =
+    let json_content: Result<HashMap<String, String>, AppErrors> =
         serde_json::from_str(&contents).map_err(|_| AppErrors::ErrorToReadOutputFile);
 
     match json_content {
@@ -98,24 +97,22 @@ fn validate_output(output: String) -> Result<String, AppErrors> {
 }
 
 fn convert_command_output_top_vec_errors(output: String) -> Vec<String> {
-    let re = Regex::new(r"at .+:\d+").unwrap();
+    let re = Regex::new(r"Failed.*\n*\n*.*php:\d+").unwrap();
 
-    output
-        .lines()
-        .filter(|line| re.is_match(line))
-        .map(|line| line.to_owned().replace("at ", "").replace(" ", ""))
-        .map(|line| line.to_owned())
+    re.captures_iter(&output)
+        .map(|captures| captures[0].to_string())
+        .map(|line| line.to_owned().replace("\n", "").replace("  ", " "))
         .collect()
 }
 
-fn convert_errors_vec_to_errors_hashmap(errors_vec: Vec<String>) -> HashMap<String, u32> {
-    let mut map: HashMap<String, u32> = HashMap::new();
+fn convert_errors_vec_to_errors_hashmap(errors_vec: Vec<String>) -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
 
     for s in errors_vec {
-        if let Some(index) = s.find(":") {
-            if let Ok(num) = s[index + 1..].parse::<u32>() {
-                let key = s[..index].to_string();
-                map.insert(format!("{}:{}", key, num), num);
+        if let Some(index) = s.find(". at") {
+            if let Ok(error_file) = s[index + 1..].parse::<String>() {
+                let error_text = s[..index].to_string();
+                map.insert(error_file.replace(" at ", ""), error_text);
             }
         }
     }
@@ -124,10 +121,10 @@ fn convert_errors_vec_to_errors_hashmap(errors_vec: Vec<String>) -> HashMap<Stri
 }
 
 fn get_errors_to_insert(
-    error_map: HashMap<String, u32>,
-    output_file_content: HashMap<String, u32>,
-) -> Result<HashMap<String, u32>, AppErrors> {
-    let mut result: HashMap<String, u32> = HashMap::new();
+    error_map: HashMap<String, String>,
+    output_file_content: HashMap<String, String>,
+) -> Result<HashMap<String, String>, AppErrors> {
+    let mut result: HashMap<String, String> = HashMap::new();
 
     for (key, value) in error_map.iter() {
         if !result.contains_key(key) {
@@ -148,7 +145,7 @@ fn get_errors_to_insert(
     Ok(result)
 }
 
-fn insert_erorrs(errors_to_insert: HashMap<String, u32>) {
+fn insert_erorrs(errors_to_insert: HashMap<String, String>) {
     let json = serde_json::to_string(&errors_to_insert).unwrap();
     std::fs::write("output.json", json).unwrap();
 
