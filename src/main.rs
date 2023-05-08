@@ -1,48 +1,148 @@
-use std::fs::File;
-use std::io::prelude::*;
+use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::Read;
 use std::process::Command;
 
 use regex::Regex;
 
+#[derive(Debug)]
+enum AppErrors {
+    ErrorAtYourTestCase,
+    ErrorToReadOutputFile,
+    NotHasErrors,
+}
+
+impl AppErrors {
+    fn to_message(&self) -> &str {
+        match self {
+            AppErrors::ErrorAtYourTestCase => "Error at your test case",
+            AppErrors::ErrorToReadOutputFile => "Error to read output file",
+            AppErrors::NotHasErrors => "Finish, no errors to insert...",
+        }
+    }
+}
+
 fn main() {
-    let mut file = File::create("output.txt").unwrap();
-    let project_path = "/home/zander/projects/souk/rocinha";
+    let project_path = "/home/zander/projects/personal/example-app";
+    // let project_path = "/home/zander/projects/souk/rocinha";
     let command = r#"./vendor/bin/pest"#;
-    let filter = r#"passa as validacoes e execute os side effects"#;
+    let output_file_name = String::from("output.json");
 
     loop {
+        println!("Run tests...");
+
+        let mut output_file = read_json(&output_file_name).unwrap();
+        let output_file_content = get_file_content(&mut output_file);
+
         let output = Command::new(command)
             .current_dir(project_path)
             .arg("--compact")
-            // .arg("--filter")
-            // .arg(filter)
             .output();
 
-        let command_response = match output {
-            Ok(value) => value,
+        let output = match output {
+            Ok(value) => String::from_utf8(value.stdout).unwrap(),
             Err(err) => panic!("Error at run command {}", err),
         };
 
-        println!("Run tests...");
+        let output = match validate_output(output) {
+            Ok(value) => value,
+            Err(err) => panic!("{}", err.to_message()),
+        };
 
-        let command_response = String::from_utf8(command_response.stdout)
-            .unwrap()
-            .replace("\n", "");
+        let errors_vec = convert_command_output_top_vec_errors(output);
+        let error_map = convert_errors_vec_to_errors_hashmap(errors_vec);
 
-        let re: Regex = Regex::new(r"FAILED\s+(.*?)\.").unwrap();
-        let extracted_text = re
-            .captures(&command_response)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str()
-            .trim();
+        let error_to_insert = get_errors_to_insert(error_map, output_file_content);
 
-        println!("Errors write...  {}", extracted_text);
-
-        let line = format!("{} \n", extracted_text);
-        file.write_all(line.as_bytes()).unwrap();
-
-        println!("Finish run...");
+        match error_to_insert {
+            Ok(values) => insert_erorrs(values),
+            Err(error) => println!("{}", error.to_message()),
+        }
     }
+}
+
+fn read_json(file_name: &String) -> Result<File, AppErrors> {
+    match File::open(&file_name) {
+        Ok(file) => file,
+        Err(_) => OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&file_name)
+            .map_err(|_| AppErrors::ErrorToReadOutputFile)?,
+    };
+
+    File::open(file_name).map_err(|_| AppErrors::ErrorToReadOutputFile)
+}
+
+fn get_file_content(file: &mut File) -> HashMap<String, u32> {
+    let mut contents = String::new();
+    file.read_to_string(&mut contents);
+
+    let json_content: Result<HashMap<String, u32>, AppErrors> =
+        serde_json::from_str(&contents).map_err(|_| AppErrors::ErrorToReadOutputFile);
+
+    match json_content {
+        Ok(value) => value,
+        Err(_) => HashMap::new(),
+    }
+}
+
+fn validate_output(output: String) -> Result<String, AppErrors> {
+    if output.contains("ERROR") {
+        return Err(AppErrors::ErrorAtYourTestCase);
+    }
+
+    Ok(output)
+}
+
+fn convert_command_output_top_vec_errors(output: String) -> Vec<String> {
+    let re = Regex::new(r"at .+:\d+").unwrap();
+
+    output
+        .lines()
+        .filter(|line| re.is_match(line))
+        .map(|line| line.to_owned().replace("at ", "").replace(" ", ""))
+        .map(|line| line.to_owned())
+        .collect()
+}
+
+fn convert_errors_vec_to_errors_hashmap(errors_vec: Vec<String>) -> HashMap<String, u32> {
+    let mut map: HashMap<String, u32> = HashMap::new();
+
+    for s in errors_vec {
+        if let Some(index) = s.find(":") {
+            if let Ok(num) = s[index + 1..].parse::<u32>() {
+                let key = s[..index].to_string();
+                map.insert(key, num);
+            }
+        }
+    }
+
+    map
+}
+
+fn get_errors_to_insert(
+    error_map: HashMap<String, u32>,
+    output_file_content: HashMap<String, u32>,
+) -> Result<HashMap<String, u32>, AppErrors> {
+    let mut result: HashMap<String, u32> = HashMap::new();
+
+    for (key, value) in error_map.iter() {
+        if !output_file_content.contains_key(key) || output_file_content.get(key) != Some(value) {
+            result.insert(key.to_owned(), value.to_owned());
+        }
+    }
+
+    if result.is_empty() {
+        return Err(AppErrors::NotHasErrors);
+    }
+
+    Ok(result)
+}
+
+fn insert_erorrs(errors_to_insert: HashMap<String, u32>) {
+    let json = serde_json::to_string(&errors_to_insert).unwrap();
+    std::fs::write("output.json", json).unwrap();
+
+    println!("Finish, errors inserted...")
 }
