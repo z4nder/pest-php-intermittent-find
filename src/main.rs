@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::fs::{File, OpenOptions};
 use std::io::Read;
 use std::process::Command;
@@ -27,8 +28,9 @@ fn main() {
     // let project_path = "/home/zander/projects/souk/rocinha";
     let command = r#"./vendor/bin/pest"#;
     let output_file_name = String::from("output.json");
+    let repeat = 1;
 
-    loop {
+    for _i in 0..repeat {
         println!("Run tests...");
 
         let mut output_file = read_json(&output_file_name).unwrap();
@@ -49,7 +51,7 @@ fn main() {
             Err(err) => panic!("{}", err.to_message()),
         };
 
-        let errors_vec = convert_command_output_top_vec_errors(output);
+        let errors_vec: Vec<String> = convert_command_output_top_vec_errors(output);
         let error_map = convert_errors_vec_to_errors_hashmap(errors_vec);
 
         let error_to_insert = get_errors_to_insert(error_map, output_file_content);
@@ -76,7 +78,7 @@ fn read_json(file_name: &String) -> Result<File, AppErrors> {
 
 fn get_file_content(file: &mut File) -> HashMap<String, u32> {
     let mut contents = String::new();
-    file.read_to_string(&mut contents);
+    file.read_to_string(&mut contents).unwrap();
 
     let json_content: Result<HashMap<String, u32>, AppErrors> =
         serde_json::from_str(&contents).map_err(|_| AppErrors::ErrorToReadOutputFile);
@@ -113,7 +115,7 @@ fn convert_errors_vec_to_errors_hashmap(errors_vec: Vec<String>) -> HashMap<Stri
         if let Some(index) = s.find(":") {
             if let Ok(num) = s[index + 1..].parse::<u32>() {
                 let key = s[..index].to_string();
-                map.insert(key, num);
+                map.insert(format!("{}:{}", key, num), num);
             }
         }
     }
@@ -128,8 +130,14 @@ fn get_errors_to_insert(
     let mut result: HashMap<String, u32> = HashMap::new();
 
     for (key, value) in error_map.iter() {
-        if !output_file_content.contains_key(key) || output_file_content.get(key) != Some(value) {
-            result.insert(key.to_owned(), value.to_owned());
+        if !result.contains_key(key) {
+            result.insert(key.clone(), value.clone());
+        }
+    }
+
+    for (key, value) in output_file_content.iter() {
+        if !result.contains_key(key) {
+            result.insert(key.clone(), value.clone());
         }
     }
 
