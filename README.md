@@ -28,9 +28,18 @@
 ## How to use
 - Run:
 ```bash
- cargo run
+ cargo install pest-intermittent
+```
+- access your project diretory
+- Run:
+```bash
+  pest-intermittent 10 ./
 ```
 - See the output.json file
+
+## Params explain
+- First: Repeat quantity
+- Second: Project path
 
 
 ## Contribute
